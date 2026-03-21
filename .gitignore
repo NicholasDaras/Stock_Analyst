@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+portfolio.json
+scan_results.json
+sp500_tickers.json
+scan.log
+.streamlit/secrets.toml
+venv/
