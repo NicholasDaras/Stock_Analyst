@@ -754,6 +754,7 @@ tab_portfolio, tab_screener, tab_macro, tab_news, tab_lookup = st.tabs(
 # ── Tab 1: Portfolio ──────────────────────────────────────────────────────────
 
 with tab_portfolio:
+  try:
     if not portfolio["holdings"]:
         st.markdown(
             '<div style="color:#7d8590; text-align:center; padding:3rem;">'
@@ -831,11 +832,14 @@ with tab_portfolio:
                                     label_visibility="collapsed")
             if selected:
                 render_detail(analyses[selected])
+  except Exception as e:
+    st.error(f"Portfolio tab error: {e}")
 
 
 # ── Tab 2: Screener ───────────────────────────────────────────────────────────
 
 with tab_screener:
+  try:
     # ── Load cached scan results ──
     scan_data = None
     scan_file = os.path.join(os.path.dirname(__file__), "scan_results.json")
@@ -946,62 +950,64 @@ with tab_screener:
                 for a in results:
                     with st.expander(f"{a['ticker']} — {a['name']} ({a['verdict']})"):
                         render_detail(a)
+  except Exception as e:
+    st.error(f"Screener tab error: {e}")
 
 
 # ── Tab 3: Market Conditions ──────────────────────────────────────────────────
 
 with tab_macro:
-    st.header("Market Conditions")
-    render_macro_tab()
+    try:
+        st.header("Market Conditions")
+        render_macro_tab()
+    except Exception as e:
+        st.error(f"Market tab error: {e}")
 
 
 # ── Tab 4: News ───────────────────────────────────────────────────────────────
 
 with tab_news:
-    st.header("News Feed")
-    news_tickers = list(portfolio["holdings"].keys()) + portfolio.get("watchlist", [])
-    news_tickers = list(dict.fromkeys(news_tickers))
+    try:
+        st.header("News Feed")
+        news_tickers = list(portfolio["holdings"].keys()) + portfolio.get("watchlist", [])
+        news_tickers = list(dict.fromkeys(news_tickers))
 
-    if not news_tickers:
-        st.markdown(
-            '<div style="color:#7d8590; text-align:center; padding:3rem;">'
-            'Add holdings or watchlist stocks to see relevant news.</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        for tk in news_tickers:
-            articles = cached_news(tk)
-            if articles:
-                st.markdown(
-                    f'<div style="color:#e6edf3; font-weight:600; font-size:1rem; '
-                    f'margin:1rem 0 0.5rem 0;">{tk}</div>',
-                    unsafe_allow_html=True,
-                )
-                for art in articles:
-                    render_news_card(art)
+        if not news_tickers:
+            st.info("Add holdings or watchlist stocks to see relevant news.")
+        else:
+            for tk in news_tickers:
+                articles = cached_news(tk)
+                if articles:
+                    st.subheader(tk)
+                    for art in articles:
+                        render_news_card(art)
+    except Exception as e:
+        st.error(f"News tab error: {e}")
 
 
-# ── Tab 4: Single Lookup ─────────────────────────────────────────────────────
+# ── Tab 5: Single Lookup ─────────────────────────────────────────────────────
 
 with tab_lookup:
-    st.header("Stock Lookup")
-    col_input, col_marr = st.columns([2, 1])
-    ticker_input = col_input.text_input("Ticker", placeholder="AAPL", label_visibility="collapsed")
-    marr_input = col_marr.slider("MARR %", min_value=5, max_value=30, value=15, step=1)
+    try:
+        st.header("Stock Lookup")
+        col_input, col_marr = st.columns([2, 1])
+        ticker_input = col_input.text_input("Ticker", placeholder="AAPL", label_visibility="collapsed")
+        marr_input = col_marr.slider("MARR %", min_value=5, max_value=30, value=15, step=1)
 
-    if st.button("Analyze", type="primary") and ticker_input:
-        with st.spinner(f"Analyzing {ticker_input.upper()}..."):
-            result = full_analysis(ticker_input.strip(), marr=marr_input / 100)
-        if result:
-            render_detail(result)
+        if st.button("Analyze", type="primary") and ticker_input:
+            with st.spinner(f"Analyzing {ticker_input.upper()}..."):
+                result = full_analysis(ticker_input.strip(), marr=marr_input / 100)
+            if result:
+                render_detail(result)
 
-            st.markdown('<div class="section-title">Recent News</div>', unsafe_allow_html=True)
-            articles = get_news(ticker_input.strip(), count=8)
-            if articles:
-                for art in articles:
-                    render_news_card(art)
+                st.markdown("### Recent News")
+                articles = get_news(ticker_input.strip(), count=8)
+                if articles:
+                    for art in articles:
+                        render_news_card(art)
+                else:
+                    st.info("No news found.")
             else:
-                st.markdown('<div style="color:#7d8590;">No news found.</div>',
-                            unsafe_allow_html=True)
-        else:
-            st.error(f"Could not find data for '{ticker_input}'. Check the ticker symbol.")
+                st.error(f"Could not find data for '{ticker_input}'. Check the ticker symbol.")
+    except Exception as e:
+        st.error(f"Lookup tab error: {e}")
