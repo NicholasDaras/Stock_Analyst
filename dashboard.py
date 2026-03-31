@@ -17,9 +17,9 @@ from portfolio import (
     add_to_watchlist, remove_from_watchlist,
 )
 
-# Optional integrations — degrade gracefully if keys missing
+# Optional integrations — degrade gracefully if missing
 _fred_available = False
-_quiver_available = False
+_edgar_available = False
 
 try:
     from fred_data import fetch_macro_snapshot, compute_fear_greed, suggest_marr
@@ -28,8 +28,8 @@ except ImportError:
     pass
 
 try:
-    from quiver_data import get_insider_trading, get_congressional_trading, get_lobbying, get_gov_contracts
-    _quiver_available = True
+    from edgar_data import get_insider_trading
+    _edgar_available = True
 except ImportError:
     pass
 
@@ -228,26 +228,10 @@ def cached_macro() -> dict | None:
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def cached_insider(ticker: str) -> dict | None:
-    if not _quiver_available:
+    if not _edgar_available:
         return None
     try:
-        key = st.secrets.get("quiver_api_key")
-        if not key:
-            return None
-        return get_insider_trading(ticker, api_key=key)
-    except Exception:
-        return None
-
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def cached_congress(ticker: str) -> dict | None:
-    if not _quiver_available:
-        return None
-    try:
-        key = st.secrets.get("quiver_api_key")
-        if not key:
-            return None
-        return get_congressional_trading(ticker, api_key=key)
+        return get_insider_trading(ticker)
     except Exception:
         return None
 
@@ -488,9 +472,9 @@ def render_detail(analysis: dict):
 - **Future Price:** {dollar(sticker['future_price'])}
 """)
 
-    # Insider & Congressional trading (Quiver)
-    if _quiver_available:
-        with st.expander("Insider & Congressional Trading"):
+    # Insider trading (SEC EDGAR)
+    if _edgar_available:
+        with st.expander("Insider Trading (SEC Form 4)"):
             render_insider_data(analysis["ticker"])
 
 
@@ -512,72 +496,47 @@ def render_news_card(art: dict):
 
 
 def render_insider_data(ticker: str):
-    """Render insider + congressional trading for a stock detail view."""
+    """Render insider trading data from SEC EDGAR Form 4 filings."""
     insider = cached_insider(ticker)
-    congress = cached_congress(ticker)
 
-    has_data = False
-
-    if insider and insider.get("summary") and insider["summary"]["total_buys"] + insider["summary"]["total_sells"] > 0:
-        has_data = True
-        s = insider["summary"]
-        sentiment_cls = {"BULLISH": "insider-buy", "BEARISH": "insider-sell"}.get(s["sentiment"], "")
-        st.markdown(f'<div class="section-title">Insider Trading ({s["period_months"]}mo)</div>',
+    if not insider or not insider.get("summary"):
+        st.markdown('<div style="color:#7d8590;">No insider trading data available.</div>',
                     unsafe_allow_html=True)
+        return
 
-        cards = [
-            metric_card("Insider Sentiment", f'<span class="{sentiment_cls}">{s["sentiment"]}</span>'),
-            metric_card("Buys", str(s["total_buys"]), f"${s['buy_value']:,.0f}" if s["buy_value"] else None),
-            metric_card("Sells", str(s["total_sells"]), f"${s['sell_value']:,.0f}" if s["sell_value"] else None, delta_pos=False),
-            metric_card("Net Value", f"${s['net_value']:,.0f}", delta_pos=s["net_value"] >= 0),
-        ]
-        st.markdown(metric_row(cards), unsafe_allow_html=True)
+    s = insider["summary"]
+    if s["total_buys"] + s["total_sells"] == 0:
+        st.markdown('<div style="color:#7d8590;">No insider buys or sells in the last '
+                    f'{s["period_months"]} months.</div>', unsafe_allow_html=True)
+        return
 
-        if insider.get("transactions"):
-            rows = []
-            for t in insider["transactions"][:10]:
-                cls = "insider-buy" if t["type"] == "BUY" else "insider-sell" if t["type"] == "SELL" else ""
-                rows.append({
-                    "Date": t["date"],
-                    "Name": t["name"],
-                    "Title": t["title"],
-                    "Type": t["type"],
-                    "Shares": f"{t['shares']:,.0f}" if t["shares"] else "",
-                    "Price": f"${t['price']:,.2f}" if t["price"] else "",
-                    "Value": f"${t['value']:,.0f}" if t["value"] else "",
-                })
-            if rows:
-                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    sentiment_cls = {"BULLISH": "insider-buy", "BEARISH": "insider-sell"}.get(s["sentiment"], "")
+    st.markdown(f'<div class="section-title">Insider Trading ({s["period_months"]}mo) '
+                f'<span style="font-size:0.75rem; color:#7d8590;">via SEC EDGAR Form 4</span></div>',
+                unsafe_allow_html=True)
 
-    if congress and congress.get("summary") and congress["summary"]["total_trades"] > 0:
-        has_data = True
-        cs = congress["summary"]
-        st.markdown(f'<div class="section-title">Congressional Trading ({cs["period_months"]}mo)</div>',
-                    unsafe_allow_html=True)
+    cards = [
+        metric_card("Insider Sentiment", f'<span class="{sentiment_cls}">{s["sentiment"]}</span>'),
+        metric_card("Buys", str(s["total_buys"]), f"${s['buy_value']:,.0f}" if s["buy_value"] else None),
+        metric_card("Sells", str(s["total_sells"]), f"${s['sell_value']:,.0f}" if s["sell_value"] else None, delta_pos=False),
+        metric_card("Net Value", f"${s['net_value']:,.0f}", delta_pos=s["net_value"] >= 0),
+    ]
+    st.markdown(metric_row(cards), unsafe_allow_html=True)
 
-        cards = [
-            metric_card("Total Trades", str(cs["total_trades"])),
-            metric_card("Buys", str(cs["total_buys"])),
-            metric_card("Sells", str(cs["total_sells"])),
-        ]
-        st.markdown(metric_row(cards), unsafe_allow_html=True)
-
-        if congress.get("trades"):
-            rows = []
-            for t in congress["trades"][:10]:
-                rows.append({
-                    "Date": t["date"],
-                    "Representative": t["representative"],
-                    "Party": t["party"],
-                    "Chamber": t["chamber"],
-                    "Type": t["type"],
-                    "Amount": t["amount"] if isinstance(t["amount"], str) else f"${t['amount']:,.0f}",
-                })
-            if rows:
-                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
-    if not has_data:
-        return  # silently skip if no data
+    if insider.get("transactions"):
+        rows = []
+        for t in insider["transactions"][:10]:
+            rows.append({
+                "Date": t["date"],
+                "Name": t["name"],
+                "Title": t["title"],
+                "Type": t["type"],
+                "Shares": f"{t['shares']:,.0f}" if t["shares"] else "",
+                "Price": f"${t['price']:,.2f}" if t["price"] else "",
+                "Value": f"${t['value']:,.0f}" if t["value"] else "",
+            })
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
 def render_macro_tab():
