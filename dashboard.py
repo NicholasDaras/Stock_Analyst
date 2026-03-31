@@ -17,6 +17,22 @@ from portfolio import (
     add_to_watchlist, remove_from_watchlist,
 )
 
+# Optional integrations — degrade gracefully if keys missing
+_fred_available = False
+_quiver_available = False
+
+try:
+    from fred_data import fetch_macro_snapshot, compute_fear_greed, suggest_marr
+    _fred_available = True
+except ImportError:
+    pass
+
+try:
+    from quiver_data import get_insider_trading, get_congressional_trading, get_lobbying, get_gov_contracts
+    _quiver_available = True
+except ImportError:
+    pass
+
 st.set_page_config(page_title="Rule #1", page_icon="$", layout="wide")
 
 
@@ -137,6 +153,38 @@ st.markdown("""
     }
     section[data-testid="stSidebar"] .stButton > button:hover { background: #30363d; }
 
+    /* ── Gauge ── */
+    .gauge-container { text-align: center; padding: 1rem; }
+    .gauge-score { font-size: 3rem; font-weight: 700; color: #e6edf3; }
+    .gauge-label { font-size: 1.1rem; font-weight: 600; margin-top: 0.2rem; }
+    .gauge-desc { color: #7d8590; font-size: 0.85rem; margin-top: 0.3rem; }
+    .gauge-fear { color: #3fb950; }
+    .gauge-cautious { color: #d29922; }
+    .gauge-neutral { color: #7d8590; }
+    .gauge-optimistic { color: #58a6ff; }
+    .gauge-greed { color: #f85149; }
+
+    /* ── Signal rows ── */
+    .signal-row {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 0.6rem 0; border-bottom: 1px solid #21262d;
+    }
+    .signal-name { color: #e6edf3; font-weight: 500; }
+    .signal-status { font-weight: 600; font-size: 0.85rem; }
+    .signal-desc { color: #7d8590; font-size: 0.75rem; }
+
+    /* ── Insider cards ── */
+    .insider-buy { color: #3fb950; }
+    .insider-sell { color: #f85149; }
+    .insider-row {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 0.5rem 0; border-bottom: 1px solid #161b22;
+        font-size: 0.85rem;
+    }
+    .insider-row .name { color: #e6edf3; font-weight: 500; }
+    .insider-row .title { color: #7d8590; font-size: 0.75rem; }
+    .insider-row .date { color: #7d8590; }
+
     /* ── Hide streamlit defaults ── */
     #MainMenu { visibility: hidden; }
     header[data-testid="stHeader"] { background: transparent; }
@@ -163,6 +211,45 @@ def cached_analysis(ticker: str) -> dict | None:
 @st.cache_data(ttl=1800, show_spinner=False)
 def cached_news(ticker: str) -> list[dict]:
     return get_news(ticker, count=5)
+
+
+@st.cache_data(ttl=7200, show_spinner=False)
+def cached_macro() -> dict | None:
+    if not _fred_available:
+        return None
+    try:
+        key = st.secrets.get("fred_api_key")
+        if not key:
+            return None
+        return fetch_macro_snapshot(api_key=key)
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_insider(ticker: str) -> dict | None:
+    if not _quiver_available:
+        return None
+    try:
+        key = st.secrets.get("quiver_api_key")
+        if not key:
+            return None
+        return get_insider_trading(ticker, api_key=key)
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_congress(ticker: str) -> dict | None:
+    if not _quiver_available:
+        return None
+    try:
+        key = st.secrets.get("quiver_api_key")
+        if not key:
+            return None
+        return get_congressional_trading(ticker, api_key=key)
+    except Exception:
+        return None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -401,6 +488,11 @@ def render_detail(analysis: dict):
 - **Future Price:** {dollar(sticker['future_price'])}
 """)
 
+    # Insider & Congressional trading (Quiver)
+    if _quiver_available:
+        with st.expander("Insider & Congressional Trading"):
+            render_insider_data(analysis["ticker"])
+
 
 def render_news_card(art: dict):
     pub = f" &middot; {art['publisher']}" if art.get("publisher") else ""
@@ -417,6 +509,214 @@ def render_news_card(art: dict):
         f'<div class="news-item">{title_html}<div class="news-meta">{pub}{date}</div></div>',
         unsafe_allow_html=True,
     )
+
+
+def render_insider_data(ticker: str):
+    """Render insider + congressional trading for a stock detail view."""
+    insider = cached_insider(ticker)
+    congress = cached_congress(ticker)
+
+    has_data = False
+
+    if insider and insider.get("summary") and insider["summary"]["total_buys"] + insider["summary"]["total_sells"] > 0:
+        has_data = True
+        s = insider["summary"]
+        sentiment_cls = {"BULLISH": "insider-buy", "BEARISH": "insider-sell"}.get(s["sentiment"], "")
+        st.markdown(f'<div class="section-title">Insider Trading ({s["period_months"]}mo)</div>',
+                    unsafe_allow_html=True)
+
+        cards = [
+            metric_card("Insider Sentiment", f'<span class="{sentiment_cls}">{s["sentiment"]}</span>'),
+            metric_card("Buys", str(s["total_buys"]), f"${s['buy_value']:,.0f}" if s["buy_value"] else None),
+            metric_card("Sells", str(s["total_sells"]), f"${s['sell_value']:,.0f}" if s["sell_value"] else None, delta_pos=False),
+            metric_card("Net Value", f"${s['net_value']:,.0f}", delta_pos=s["net_value"] >= 0),
+        ]
+        st.markdown(metric_row(cards), unsafe_allow_html=True)
+
+        if insider.get("transactions"):
+            rows = []
+            for t in insider["transactions"][:10]:
+                cls = "insider-buy" if t["type"] == "BUY" else "insider-sell" if t["type"] == "SELL" else ""
+                rows.append({
+                    "Date": t["date"],
+                    "Name": t["name"],
+                    "Title": t["title"],
+                    "Type": t["type"],
+                    "Shares": f"{t['shares']:,.0f}" if t["shares"] else "",
+                    "Price": f"${t['price']:,.2f}" if t["price"] else "",
+                    "Value": f"${t['value']:,.0f}" if t["value"] else "",
+                })
+            if rows:
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    if congress and congress.get("summary") and congress["summary"]["total_trades"] > 0:
+        has_data = True
+        cs = congress["summary"]
+        st.markdown(f'<div class="section-title">Congressional Trading ({cs["period_months"]}mo)</div>',
+                    unsafe_allow_html=True)
+
+        cards = [
+            metric_card("Total Trades", str(cs["total_trades"])),
+            metric_card("Buys", str(cs["total_buys"])),
+            metric_card("Sells", str(cs["total_sells"])),
+        ]
+        st.markdown(metric_row(cards), unsafe_allow_html=True)
+
+        if congress.get("trades"):
+            rows = []
+            for t in congress["trades"][:10]:
+                rows.append({
+                    "Date": t["date"],
+                    "Representative": t["representative"],
+                    "Party": t["party"],
+                    "Chamber": t["chamber"],
+                    "Type": t["type"],
+                    "Amount": t["amount"] if isinstance(t["amount"], str) else f"${t['amount']:,.0f}",
+                })
+            if rows:
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    if not has_data:
+        return  # silently skip if no data
+
+
+def render_macro_tab():
+    """Render the Market Conditions tab with FRED data."""
+    if not _fred_available:
+        st.markdown(
+            '<div style="color:#7d8590; text-align:center; padding:3rem;">'
+            'FRED integration not available. Install fredapi: <code>pip install fredapi</code><br>'
+            'Then add <code>fred_api_key = "YOUR_KEY"</code> to .streamlit/secrets.toml</div>',
+            unsafe_allow_html=True)
+        return
+
+    macro = cached_macro()
+    if macro is None:
+        st.markdown(
+            '<div style="color:#7d8590; text-align:center; padding:3rem;">'
+            'Add <code>fred_api_key = "YOUR_KEY"</code> to .streamlit/secrets.toml<br>'
+            'Get a free key at <a href="https://fred.stlouisfed.org/docs/api/api_key.html" '
+            'style="color:#58a6ff;">fred.stlouisfed.org</a></div>',
+            unsafe_allow_html=True)
+        return
+
+    # Fear/Greed gauge
+    fg = compute_fear_greed(macro)
+    gauge_cls = f"gauge-{fg['label'].lower()}"
+
+    st.markdown(
+        f'<div class="gauge-container">'
+        f'<div class="gauge-score">{fg["score"]}</div>'
+        f'<div class="gauge-label {gauge_cls}">{fg["label"]}</div>'
+        f'<div class="gauge-desc">{fg["description"]}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Suggested MARR
+    suggested = suggest_marr(macro)
+    if suggested != 0.15:
+        st.markdown(
+            f'<div style="background:#161b22; border:1px solid #21262d; border-radius:6px; '
+            f'padding:0.8rem 1rem; margin:0.5rem 0 1rem 0; color:#58a6ff; text-align:center;">'
+            f'Suggested MARR based on current rates: <strong>{suggested*100:.1f}%</strong> '
+            f'(default 15%)</div>',
+            unsafe_allow_html=True,
+        )
+
+    # Signals detail
+    st.markdown('<div class="section-title">Market Signals</div>', unsafe_allow_html=True)
+    for name, status, desc in fg["signals"]:
+        status_color = {"INVERTED": "#f85149", "HIGH": "#f85149", "RESTRICTIVE": "#f85149",
+                        "PESSIMISTIC": "#3fb950",  # contrarian
+                        "FLAT": "#d29922", "ELEVATED": "#d29922", "CAUTIOUS": "#d29922",
+                        "NORMAL": "#7d8590", "NEUTRAL": "#7d8590", "MODERATE": "#7d8590",
+                        "STEEP": "#58a6ff", "LOW": "#58a6ff", "ACCOMMODATIVE": "#3fb950",
+                        "OPTIMISTIC": "#58a6ff"}.get(status, "#7d8590")
+        st.markdown(
+            f'<div class="signal-row">'
+            f'<div><div class="signal-name">{name}</div><div class="signal-desc">{desc}</div></div>'
+            f'<div class="signal-status" style="color:{status_color};">{status}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    # Key indicators table
+    st.markdown('<div class="section-title">Key Indicators</div>', unsafe_allow_html=True)
+
+    indicators = [
+        ("fed_funds", "pct"), ("treasury_10y", "pct"), ("treasury_2y", "pct"),
+        ("yield_spread", "pct"), ("unemployment", "pct"), ("consumer_sentiment", "num"),
+    ]
+
+    cards = []
+    for key, _ in indicators:
+        data = macro.get(key, {})
+        if data.get("value") is not None:
+            val = data["value"]
+            prev = data.get("prev_value")
+            if data["fmt"] == "pct":
+                val_str = f"{val:.2f}%"
+            elif data["fmt"] == "dollar":
+                val_str = f"${val:,.0f}B"
+            else:
+                val_str = f"{val:,.1f}"
+
+            delta = None
+            delta_pos = True
+            if prev is not None:
+                diff = val - prev
+                delta = f"{diff:+.2f}" if data["fmt"] == "pct" else f"{diff:+,.1f}"
+                delta_pos = diff >= 0
+
+            cards.append(metric_card(data["label"], val_str, delta, delta_pos))
+
+    if cards:
+        # Render in rows of 3
+        for i in range(0, len(cards), 3):
+            st.markdown(metric_row(cards[i:i+3]), unsafe_allow_html=True)
+
+    # Sparkline charts for key series
+    st.markdown('<div class="section-title">Trends (2 Years)</div>', unsafe_allow_html=True)
+
+    chart_keys = ["treasury_10y", "yield_spread", "unemployment", "consumer_sentiment"]
+    cols = st.columns(2)
+    for i, key in enumerate(chart_keys):
+        data = macro.get(key, {})
+        history = data.get("history", [])
+        if not history:
+            continue
+
+        chart_df = pd.DataFrame(history, columns=["Date", "Value"])
+        chart_df["Date"] = pd.to_datetime(chart_df["Date"])
+
+        chart = (
+            alt.Chart(chart_df)
+            .mark_area(
+                line={"color": "#58a6ff", "strokeWidth": 1.5},
+                color=alt.Gradient(
+                    gradient="linear",
+                    stops=[
+                        alt.GradientStop(color="rgba(88,166,255,0.3)", offset=0),
+                        alt.GradientStop(color="rgba(88,166,255,0.01)", offset=1),
+                    ],
+                    x1=1, x2=1, y1=1, y2=0,
+                ),
+            )
+            .encode(
+                x=alt.X("Date:T", axis=alt.Axis(labelColor="#7d8590", gridColor="#21262d",
+                         format="%b '%y"), title=None),
+                y=alt.Y("Value:Q", axis=alt.Axis(labelColor="#7d8590", gridColor="#21262d"),
+                         title=data.get("label", key)),
+                tooltip=[alt.Tooltip("Date:T", format="%Y-%m-%d"), alt.Tooltip("Value:Q", format=".2f")],
+            )
+            .properties(height=160)
+            .configure(background="transparent")
+            .configure_view(strokeWidth=0)
+        )
+
+        with cols[i % 2]:
+            st.altair_chart(chart, use_container_width=True)
 
 
 # ── Sidebar: Portfolio Management ─────────────────────────────────────────────
@@ -486,8 +786,8 @@ st.markdown("""
 
 # ── Main Content ──────────────────────────────────────────────────────────────
 
-tab_portfolio, tab_screener, tab_news, tab_lookup = st.tabs(
-    ["PORTFOLIO", "SCREENER", "NEWS", "LOOKUP"]
+tab_portfolio, tab_screener, tab_macro, tab_news, tab_lookup = st.tabs(
+    ["PORTFOLIO", "SCREENER", "MARKET", "NEWS", "LOOKUP"]
 )
 
 
@@ -688,7 +988,13 @@ with tab_screener:
                         render_detail(a)
 
 
-# ── Tab 3: News ───────────────────────────────────────────────────────────────
+# ── Tab 3: Market Conditions ──────────────────────────────────────────────────
+
+with tab_macro:
+    render_macro_tab()
+
+
+# ── Tab 4: News ───────────────────────────────────────────────────────────────
 
 with tab_news:
     news_tickers = list(portfolio["holdings"].keys()) + portfolio.get("watchlist", [])

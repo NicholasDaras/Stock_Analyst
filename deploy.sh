@@ -32,7 +32,7 @@ if [ ! -d "venv" ]; then
     python3 -m venv venv
 fi
 source venv/bin/activate
-pip install --quiet streamlit yfinance pandas
+pip install --quiet streamlit yfinance pandas fredapi requests
 echo "  Done."
 
 # --- Step 3: Password setup ---
@@ -41,12 +41,17 @@ mkdir -p ~/.streamlit
 if [ ! -f ~/.streamlit/secrets.toml ]; then
     read -sp "  Choose a dashboard password: " DASH_PASS
     echo
+    echo
+    read -p "  FRED API key (free at fred.stlouisfed.org, or press Enter to skip): " FRED_KEY
+    read -p "  Quiver Quant API key (free at quiverquant.com, or press Enter to skip): " QUIVER_KEY
     cat > ~/.streamlit/secrets.toml << EOF
 password = "$DASH_PASS"
+fred_api_key = "$FRED_KEY"
+quiver_api_key = "$QUIVER_KEY"
 EOF
-    echo "  Password saved."
+    echo "  Secrets saved."
 else
-    warn "Password already configured, skipping."
+    warn "Secrets already configured. To add API keys, edit ~/.streamlit/secrets.toml"
 fi
 
 # --- Step 4: Streamlit config ---
