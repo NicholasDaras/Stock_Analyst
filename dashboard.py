@@ -9,6 +9,9 @@ Run with: streamlit run dashboard.py
 import json
 import os
 import streamlit as st
+
+st.set_page_config(page_title="Rule #1", page_icon="$", layout="wide")
+
 import pandas as pd
 import altair as alt
 from rule1 import full_analysis, get_news, pass_fail
@@ -32,8 +35,6 @@ try:
     _edgar_available = True
 except ImportError:
     pass
-
-st.set_page_config(page_title="Rule #1", page_icon="$", layout="wide")
 
 
 # ── Authentication ────────────────────────────────────────────────────────────
