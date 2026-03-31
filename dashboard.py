@@ -30,11 +30,12 @@ try:
 except ImportError:
     pass
 
-try:
-    from edgar_data import get_insider_trading
-    _edgar_available = True
-except ImportError:
-    pass
+## EDGAR disabled — was causing script to hang on ETF tickers
+# try:
+#     from edgar_data import get_insider_trading
+#     _edgar_available = True
+# except ImportError:
+#     pass
 
 
 # ── Authentication ────────────────────────────────────────────────────────────
