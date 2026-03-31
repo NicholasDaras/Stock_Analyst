@@ -473,8 +473,8 @@ def render_detail(analysis: dict):
 - **Future Price:** {dollar(sticker['future_price'])}
 """)
 
-    # Insider trading (SEC EDGAR)
-    if _edgar_available:
+    # Insider trading (SEC EDGAR) — skip for ETFs/funds (no Form 4 data)
+    if _edgar_available and analysis.get("sector", "N/A") != "N/A":
         with st.expander("Insider Trading (SEC Form 4)"):
             render_insider_data(analysis["ticker"])
 
