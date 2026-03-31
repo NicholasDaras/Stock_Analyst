@@ -951,12 +951,14 @@ with tab_screener:
 # ── Tab 3: Market Conditions ──────────────────────────────────────────────────
 
 with tab_macro:
+    st.header("Market Conditions")
     render_macro_tab()
 
 
 # ── Tab 4: News ───────────────────────────────────────────────────────────────
 
 with tab_news:
+    st.header("News Feed")
     news_tickers = list(portfolio["holdings"].keys()) + portfolio.get("watchlist", [])
     news_tickers = list(dict.fromkeys(news_tickers))
 
@@ -982,6 +984,7 @@ with tab_news:
 # ── Tab 4: Single Lookup ─────────────────────────────────────────────────────
 
 with tab_lookup:
+    st.header("Stock Lookup")
     col_input, col_marr = st.columns([2, 1])
     ticker_input = col_input.text_input("Ticker", placeholder="AAPL", label_visibility="collapsed")
     marr_input = col_marr.slider("MARR %", min_value=5, max_value=30, value=15, step=1)
