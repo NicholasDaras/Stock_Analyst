@@ -30,12 +30,11 @@ try:
 except ImportError:
     pass
 
-## EDGAR disabled — was causing script to hang on ETF tickers
-# try:
-#     from edgar_data import get_insider_trading
-#     _edgar_available = True
-# except ImportError:
-#     pass
+try:
+    from edgar_data import get_insider_trading
+    _edgar_available = True
+except ImportError:
+    pass
 
 
 # ── Authentication ────────────────────────────────────────────────────────────
@@ -474,10 +473,13 @@ def render_detail(analysis: dict):
 - **Future Price:** {dollar(sticker['future_price'])}
 """)
 
-    # Insider trading (SEC EDGAR) — skip for ETFs/funds (no Form 4 data)
+    # Insider trading (SEC EDGAR) — on-demand only, skip ETFs
     if _edgar_available and analysis.get("sector", "N/A") != "N/A":
         with st.expander("Insider Trading (SEC Form 4)"):
-            render_insider_data(analysis["ticker"])
+            btn_key = f"insider_{analysis['ticker']}"
+            if st.button("Load insider data", key=btn_key):
+                with st.spinner("Fetching from SEC EDGAR..."):
+                    render_insider_data(analysis["ticker"])
 
 
 def render_news_card(art: dict):
