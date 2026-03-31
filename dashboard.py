@@ -57,7 +57,7 @@ def check_password() -> bool:
         col1, col2, col3 = st.columns([1, 1, 1])
         with col2:
             pwd = st.text_input("Password", type="password", label_visibility="collapsed")
-            if st.button("Login", type="primary", use_container_width=True):
+            if st.button("Login", type="primary", width="stretch"):
                 if pwd == st.secrets["password"]:
                     st.session_state["authenticated"] = True
                     st.rerun()
@@ -310,7 +310,7 @@ def render_big5_table(rows: list[dict]):
     for col, fn in fmt_cols.items():
         if col in df.columns:
             df[col] = df[col].apply(fn)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
 
 
 def render_price_vs_value_chart(analysis: dict):
@@ -347,7 +347,7 @@ def render_price_vs_value_chart(analysis: dict):
         .configure(background="transparent")
         .configure_view(strokeWidth=0)
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
 
 def render_big5_chart(analysis: dict):
@@ -398,7 +398,7 @@ def render_big5_chart(analysis: dict):
         .configure(background="transparent")
         .configure_view(strokeWidth=0)
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
 
 def render_detail(analysis: dict):
@@ -451,7 +451,7 @@ def render_detail(analysis: dict):
         b = best_rate(rates)
         rows.append({"Metric": label, **{p: pct(rates.get(p)) for p in periods},
                      "Pass?": pass_fail(b)})
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
     # Sticker price details
     with st.expander("Sticker Price Breakdown"):
@@ -537,7 +537,7 @@ def render_insider_data(ticker: str):
                 "Value": f"${t['value']:,.0f}" if t["value"] else "",
             })
         if rows:
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 
 def render_macro_tab():
@@ -676,7 +676,7 @@ def render_macro_tab():
         )
 
         with cols[i % 2]:
-            st.altair_chart(chart, use_container_width=True)
+            st.altair_chart(chart, width="stretch")
 
 
 # ── Sidebar: Portfolio Management ─────────────────────────────────────────────
@@ -823,7 +823,7 @@ with tab_portfolio:
                     "Big 5", "Verdict", "ROIC", "Sales Gr.", "EPS Gr.", "BVPS Gr.", "FCF Gr.",
                     "Sticker", "MOS"]
             cols = [c for c in cols if c in df.columns]
-            st.dataframe(df[cols], use_container_width=True, hide_index=True)
+            st.dataframe(df[cols], width="stretch", hide_index=True)
 
             # Detail per stock
             st.markdown('<div class="section-title">Detailed Analysis</div>', unsafe_allow_html=True)
