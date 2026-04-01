@@ -567,6 +567,23 @@ def render_macro_tab():
     fg = compute_fear_greed(macro)
     gauge_cls = f"gauge-{fg['label'].lower()}"
 
+    with st.expander("What is this score?", expanded=False):
+        st.markdown("""
+This is a **Market Conditions Score** (0-100) built from four economic indicators:
+
+- **0-30 = FEAR** — Economy is struggling. Historically, this is when the best buying
+  opportunities appear. Rule #1 investors look for wonderful companies trading below
+  their Margin of Safety price during these periods.
+- **30-45 = CAUTIOUS** — Mixed signals. Be selective and stick to companies with strong moats.
+- **45-60 = NEUTRAL** — Normal conditions. Focus on individual stock quality rather than timing.
+- **60-75 = OPTIMISTIC** — Markets are confident. Be patient on price — don't overpay.
+- **75-100 = GREED** — Elevated risk. Consider raising your margin of safety requirement
+  (i.e., only buy at deeper discounts).
+
+The score is calculated from the yield curve, unemployment rate, Fed Funds rate,
+and consumer sentiment — all sourced from the Federal Reserve (FRED).
+""")
+
     st.markdown(
         f'<div class="gauge-container">'
         f'<div class="gauge-score">{fg["score"]}</div>'
@@ -586,9 +603,48 @@ def render_macro_tab():
             f'(default 15%)</div>',
             unsafe_allow_html=True,
         )
+        with st.expander("What is MARR?"):
+            st.markdown(f"""
+**MARR = Minimum Acceptable Rate of Return.** In Rule #1, the default is 15%.
+
+It's the annual return you require to justify buying a stock. It's used to discount
+the future price back to today's value (the "Sticker Price").
+
+When the 10-Year Treasury yield is high (currently **{macro.get('treasury_10y', {}).get('value', 0):.2f}%**),
+you can earn a decent return risk-free. So your MARR should be higher to compensate
+for the extra risk of owning stocks. The suggested MARR is calculated as:
+
+**10-Year Treasury ({macro.get('treasury_10y', {}).get('value', 0):.2f}%) + 7% risk premium = {suggested*100:.1f}%**
+
+A higher MARR means a lower Sticker Price, which means you need a bigger discount to buy.
+""")
 
     # Signals detail
     st.markdown('<div class="section-title">Market Signals</div>', unsafe_allow_html=True)
+
+    with st.expander("How to read these signals"):
+        st.markdown("""
+Each signal evaluates one macro indicator and tells you what it means for investing:
+
+- **Yield Curve** — The difference between 10-year and 2-year Treasury yields.
+  When it's *inverted* (negative), it has historically predicted recessions 6-18 months out.
+  *Normal* or *steep* means the economy is expected to grow.
+
+- **Unemployment** — The percentage of the labor force without jobs.
+  *High* unemployment often coincides with cheap stock prices (fear).
+  *Low* unemployment means a strong economy but could signal a late-cycle peak.
+
+- **Fed Rate** — The Federal Funds Rate set by the Federal Reserve.
+  *Restrictive* (high) rates make borrowing expensive, pressuring stock valuations.
+  *Accommodative* (low) rates are a tailwind for stocks.
+
+- **Sentiment** — University of Michigan Consumer Sentiment Index.
+  *Pessimistic* readings are actually a contrarian buy signal — when everyone is
+  fearful, prices tend to be low. *Optimistic* readings can signal complacency.
+
+**Color coding:** Green = favorable for buying. Yellow = caution. Red = headwind. Gray = neutral.
+""")
+
     for name, status, desc in fg["signals"]:
         status_color = {"INVERTED": "#f85149", "HIGH": "#f85149", "RESTRICTIVE": "#f85149",
                         "PESSIMISTIC": "#3fb950",  # contrarian
@@ -606,6 +662,31 @@ def render_macro_tab():
 
     # Key indicators table
     st.markdown('<div class="section-title">Key Indicators</div>', unsafe_allow_html=True)
+
+    with st.expander("What do these numbers mean?"):
+        st.markdown("""
+- **Fed Funds Rate** — The interest rate banks charge each other overnight. Set by the
+  Federal Reserve. Drives the cost of all borrowing. Higher = tighter money = lower stock valuations.
+
+- **10-Year Treasury** — The yield on a 10-year US government bond. This is the "risk-free"
+  rate — the return you get for zero risk. Stocks need to beat this to be worth owning.
+  Also directly affects mortgage rates and corporate borrowing costs.
+
+- **2-Year Treasury** — The yield on a 2-year US government bond. Reflects what the market
+  expects the Fed to do with rates in the near term.
+
+- **Yield Spread (10Y-2Y)** — The gap between the 10-year and 2-year Treasury yields.
+  Normally positive (longer = higher yield). When it goes *negative* (inverted), it's
+  one of the most reliable recession predictors in history.
+
+- **Unemployment Rate** — Percentage of the labor force actively looking for work but
+  unemployed. Below 4% is historically very strong. Above 6% signals recession.
+
+- **Consumer Sentiment** — Survey-based index from the University of Michigan measuring
+  how optimistic consumers feel about the economy. Below 60 = pessimistic. Above 90 = optimistic.
+
+The small green/red numbers below each value show the **change from the previous reading**.
+""")
 
     indicators = [
         ("fed_funds", "pct"), ("treasury_10y", "pct"), ("treasury_2y", "pct"),
@@ -641,6 +722,22 @@ def render_macro_tab():
 
     # Sparkline charts for key series
     st.markdown('<div class="section-title">Trends (2 Years)</div>', unsafe_allow_html=True)
+
+    with st.expander("Why these charts matter"):
+        st.markdown("""
+These charts show the 2-year trend for the most important macro indicators.
+Look for:
+
+- **10-Year Treasury rising** — Stocks get cheaper (higher discount rate). Good for
+  patient buyers waiting for deals.
+- **10-Year Treasury falling** — Stocks get more expensive (lower discount rate).
+  Existing holdings benefit.
+- **Yield Spread going negative** — Recession warning. Start building your watchlist
+  of wonderful companies to buy when prices drop.
+- **Unemployment spiking** — Economy weakening. Fear increases.
+  Historically the best buying windows for Rule #1 investors.
+- **Consumer Sentiment dropping** — People are scared. Contrarian buy signal.
+""")
 
     chart_keys = ["treasury_10y", "yield_spread", "unemployment", "consumer_sentiment"]
     cols = st.columns(2)
