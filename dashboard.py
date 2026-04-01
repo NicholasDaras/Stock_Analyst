@@ -843,6 +843,71 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ── Green Light Alert Banner ─────────────────────────────────────────────────
+
+alert_file = os.path.join(os.path.dirname(__file__), "alerts.json")
+if os.path.exists(alert_file):
+    try:
+        with open(alert_file, "r") as f:
+            alert_data = json.load(f)
+        alert_stocks = alert_data.get("alerts", [])
+        alert_market = alert_data.get("market_score")
+        alert_date = alert_data.get("date", "")[:10]
+
+        if alert_stocks:
+            tickers_str = ", ".join(a["ticker"] for a in alert_stocks)
+            st.markdown(
+                f'<div style="background:#0d2818; border:1px solid #238636; border-radius:8px; '
+                f'padding:1rem 1.2rem; margin-bottom:1rem;">'
+                f'<div style="color:#3fb950; font-weight:700; font-size:1.1rem; margin-bottom:0.3rem;">'
+                f'GREEN LIGHT — {len(alert_stocks)} stock(s) passed ALL Rule #1 criteria</div>'
+                f'<div style="color:#e6edf3;">{tickers_str}</div>'
+                f'<div style="color:#7d8590; font-size:0.8rem; margin-top:0.3rem;">'
+                f'5/5 Big 5 + below MOS price'
+                f'{f" | Market score: {alert_market}/100" if alert_market else ""}'
+                f' | {alert_date}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+            with st.expander("View Green Light Details"):
+                for a in alert_stocks:
+                    signal_color = "#3fb950" if a["entry_signal"] == "STRONG BUY" else "#58a6ff"
+                    st.markdown(
+                        f'<div style="background:#161b22; border:1px solid #21262d; '
+                        f'border-radius:6px; padding:1rem; margin-bottom:0.8rem;">'
+                        f'<div style="display:flex; justify-content:space-between; align-items:center;">'
+                        f'<div>'
+                        f'<span style="color:#e6edf3; font-weight:600; font-size:1.1rem;">'
+                        f'{a["ticker"]}</span>'
+                        f' <span style="color:#7d8590;">{a["name"]}</span>'
+                        f'</div>'
+                        f'<span style="color:{signal_color}; font-weight:600;">'
+                        f'{a["entry_signal"]}</span>'
+                        f'</div>'
+                        f'<div style="color:#7d8590; margin-top:0.5rem;">{a["entry_detail"]}</div>'
+                        f'<div style="display:flex; gap:2rem; margin-top:0.8rem; flex-wrap:wrap;">'
+                        f'<div><div style="color:#7d8590;font-size:0.75rem;">PRICE</div>'
+                        f'<div style="color:#e6edf3;">${a["price"]:,.2f}</div></div>'
+                        f'<div><div style="color:#7d8590;font-size:0.75rem;">MOS PRICE</div>'
+                        f'<div style="color:#e6edf3;">${a["mos_price"]:,.2f}</div></div>'
+                        f'<div><div style="color:#7d8590;font-size:0.75rem;">STICKER PRICE</div>'
+                        f'<div style="color:#e6edf3;">${a["sticker_price"]:,.2f}</div></div>'
+                        f'<div><div style="color:#7d8590;font-size:0.75rem;">UPSIDE</div>'
+                        f'<div style="color:#3fb950; font-weight:600;">{a["upside_to_sticker"]:.0f}%</div></div>'
+                        f'<div><div style="color:#7d8590;font-size:0.75rem;">BIG 5</div>'
+                        f'<div style="color:#3fb950;">{a["big5_score"]}</div></div>'
+                        f'<div><div style="color:#7d8590;font-size:0.75rem;">HOLD PERIOD</div>'
+                        f'<div style="color:#e6edf3;">{a["hold_suggestion"]}</div></div>'
+                        f'</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if a.get("debt_note"):
+                        st.caption(a["debt_note"])
+    except Exception:
+        pass
+
 
 # ── Main Content ──────────────────────────────────────────────────────────────
 

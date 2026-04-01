@@ -193,6 +193,64 @@ def run_scan(resume: bool = False):
     log(f"BUY signals: {', '.join(buys) if buys else 'None'}")
     log(f"WATCHLIST: {', '.join(watches) if watches else 'None'}")
 
+    # ── Green Light Alert Check ──────────────────────────────────────────────
+    try:
+        from alerts import check_and_alert
+
+        # Get market score if FRED is available
+        market_score = None
+        try:
+            secrets_file = os.path.expanduser("~/.streamlit/secrets.toml")
+            fred_key = None
+            if os.path.exists(secrets_file):
+                with open(secrets_file, "r") as f:
+                    for line in f:
+                        if line.strip().startswith("fred_api_key"):
+                            fred_key = line.split("=")[1].strip().strip('"').strip("'")
+                            break
+            if fred_key:
+                from fred_data import fetch_macro_snapshot, compute_fear_greed
+                snapshot = fetch_macro_snapshot(api_key=fred_key)
+                fg = compute_fear_greed(snapshot)
+                market_score = fg["score"]
+                log(f"Market conditions score: {market_score}/100 ({fg['label']})")
+        except Exception as e:
+            log(f"Could not fetch market conditions: {e}")
+
+        # Load email config from secrets
+        email_config = None
+        try:
+            if os.path.exists(secrets_file):
+                cfg = {}
+                with open(secrets_file, "r") as f:
+                    for line in f:
+                        line = line.strip()
+                        if "=" in line and not line.startswith("#"):
+                            key, val = line.split("=", 1)
+                            cfg[key.strip()] = val.strip().strip('"').strip("'")
+                if cfg.get("alert_email") and cfg.get("smtp_user") and cfg.get("smtp_password"):
+                    email_config = {
+                        "to_email": cfg["alert_email"],
+                        "smtp_user": cfg["smtp_user"],
+                        "smtp_password": cfg["smtp_password"],
+                    }
+        except Exception:
+            pass
+
+        alerts = check_and_alert(
+            scan_file=RESULTS_FILE,
+            market_score=market_score,
+            email_config=email_config,
+        )
+
+        if alerts:
+            log(f"GREEN LIGHT: {len(alerts)} stocks passed all criteria: "
+                f"{', '.join(a['ticker'] for a in alerts)}")
+        else:
+            log("No green light alerts this scan.")
+    except Exception as e:
+        log(f"Alert check failed: {e}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="S&P 500 Rule #1 Scanner")
