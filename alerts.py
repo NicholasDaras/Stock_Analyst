@@ -17,16 +17,25 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
 
-def find_green_light_stocks(scan_results: dict, market_score: int | None = None) -> list[dict]:
+def find_green_light_stocks(
+    scan_results: dict,
+    market_score: int | None = None,
+    exclude_tickers: set | None = None,
+) -> list[dict]:
     """
     Scan results and return stocks that pass ALL criteria.
     Each result includes investment strategy suggestions.
+    Stocks in exclude_tickers (e.g. current holdings) are skipped.
     """
     if not scan_results or not scan_results.get("results"):
         return []
 
+    exclude = {t.upper() for t in (exclude_tickers or set())}
+
     alerts = []
     for ticker, data in scan_results["results"].items():
+        if ticker.upper() in exclude:
+            continue
         # Must be a BUY verdict (price <= MOS)
         if data.get("verdict") != "BUY":
             continue
@@ -275,9 +284,12 @@ def check_and_alert(
     scan_file: str | None = None,
     market_score: int | None = None,
     email_config: dict | None = None,
+    portfolio_tickers: set | None = None,
 ) -> list[dict]:
     """
     Check scan results for green light stocks and optionally send email.
+    Email is ONLY sent when the market is also favorable (score <= 45).
+    Stocks already in the user's portfolio are excluded.
     Returns the list of alerts found.
     """
     if scan_file is None:
@@ -289,12 +301,12 @@ def check_and_alert(
     with open(scan_file, "r") as f:
         scan_data = json.load(f)
 
-    alerts = find_green_light_stocks(scan_data, market_score)
+    alerts = find_green_light_stocks(scan_data, market_score, exclude_tickers=portfolio_tickers)
 
     if not alerts:
         return []
 
-    # Save alerts to file for dashboard
+    # Always save alerts to file for dashboard banner
     alert_file = os.path.join(os.path.dirname(__file__), "alerts.json")
     with open(alert_file, "w") as f:
         json.dump({
@@ -303,7 +315,13 @@ def check_and_alert(
             "alerts": alerts,
         }, f, indent=2)
 
-    # Send email if configured
+    # Only send email when market conditions are favorable
+    market_aligned = market_score is not None and market_score <= 45
+    if not market_aligned:
+        print(f"[{datetime.now()}] {len(alerts)} green light stock(s) found but market "
+              f"score is {market_score}/100 — email suppressed (need <= 45)")
+        return alerts
+
     if email_config and email_config.get("to_email"):
         try:
             send_email_alert(

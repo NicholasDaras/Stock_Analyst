@@ -237,10 +237,22 @@ def run_scan(resume: bool = False):
         except Exception:
             pass
 
+        # Load portfolio holdings to exclude from alerts
+        portfolio_tickers = set()
+        try:
+            from portfolio import get_portfolio
+            portfolio_tickers = set(get_portfolio().get("holdings", {}).keys())
+            if portfolio_tickers:
+                log(f"Excluding {len(portfolio_tickers)} portfolio holdings from alerts: "
+                    f"{', '.join(portfolio_tickers)}")
+        except Exception:
+            pass
+
         alerts = check_and_alert(
             scan_file=RESULTS_FILE,
             market_score=market_score,
             email_config=email_config,
+            portfolio_tickers=portfolio_tickers,
         )
 
         if alerts:
