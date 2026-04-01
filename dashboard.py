@@ -749,6 +749,7 @@ Look for:
 
         chart_df = pd.DataFrame(history, columns=["Date", "Value"])
         chart_df["Date"] = pd.to_datetime(chart_df["Date"])
+        chart_label = data.get("label", key)
 
         chart = (
             alt.Chart(chart_df)
@@ -767,15 +768,17 @@ Look for:
                 x=alt.X("Date:T", axis=alt.Axis(labelColor="#7d8590", gridColor="#21262d",
                          format="%b '%y"), title=None),
                 y=alt.Y("Value:Q", axis=alt.Axis(labelColor="#7d8590", gridColor="#21262d"),
-                         title=data.get("label", key)),
+                         title=None),
                 tooltip=[alt.Tooltip("Date:T", format="%Y-%m-%d"), alt.Tooltip("Value:Q", format=".2f")],
             )
-            .properties(height=160)
+            .properties(height=180)
             .configure(background="transparent")
             .configure_view(strokeWidth=0)
         )
 
         with cols[i % 2]:
+            st.markdown(f'<div style="color:#e6edf3;font-weight:500;font-size:0.9rem;margin-bottom:0.2rem;">'
+                        f'{chart_label}</div>', unsafe_allow_html=True)
             st.altair_chart(chart, width="stretch")
 
 
